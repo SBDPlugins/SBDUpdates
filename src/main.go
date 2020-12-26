@@ -36,11 +36,11 @@ var mainDB *sql.DB
 var passwordsJSON []byte
 
 func main() {
-	db, errOpenDB := sql.Open("sqlite3", "data.db")
+	db, errOpenDB := sql.Open("sqlite3", "./data.db")
 	checkErr(errOpenDB)
 	mainDB = db
 
-	passFile, jsonErr := ioutil.ReadFile("pass.json")
+	passFile, jsonErr := ioutil.ReadFile("./pass.json")
 	checkErr(jsonErr)
 	passwordsJSON = passFile
 
@@ -65,15 +65,17 @@ func main() {
 
 	http.Handle("/", r)
 
+	log.Println("-----++++++-----")
 	log.Println("SBDevelopment Update Rest API")
-	log.Println("Running on port 3222")
-	err := http.ListenAndServe(":3222", nil)
-	if err != nil {
-		log.Fatal("ListenAndServe: ", err)
-	}
+	log.Println("Running on port 25565")
+	log.Println("-----++++++-----")
+	err := http.ListenAndServe(":25565", nil)
+	checkErr(err)
 }
 
 func createTwoFactor(w http.ResponseWriter, r *http.Request) {
+	log.Println("Handling GET request to /api/v2/2fa")
+
 	password := r.FormValue("password")
 
 	dataPassword, _ := jsonparser.GetString(passwordsJSON, "twofactor")
@@ -104,7 +106,9 @@ func createTwoFactor(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "%s", string(qr))
 }
 
-func getPlugins(w http.ResponseWriter, r *http.Request) {
+func getPlugins(w http.ResponseWriter, _ *http.Request) {
+	log.Println("Handling GET request to /api/v2/plugins")
+
 	rows, err := mainDB.Query("SELECT * FROM plugins")
 	checkErr(err)
 	var plugins Plugins
@@ -126,6 +130,8 @@ func getPlugins(w http.ResponseWriter, r *http.Request) {
 }
 
 func getPlugin(w http.ResponseWriter, r *http.Request) {
+	log.Println("Handling GET request to /api/v2/plugins/:id")
+
 	id := r.URL.Query().Get(":id")
 	stmt, err := mainDB.Prepare("SELECT * FROM plugins WHERE ID = ?")
 	checkErr(err)
@@ -147,6 +153,8 @@ func getPlugin(w http.ResponseWriter, r *http.Request) {
 }
 
 func addPlugin(w http.ResponseWriter, r *http.Request) {
+	log.Println("Handling POST request to /api/v2/plugins/:id")
+
 	username, token := r.FormValue("username"), r.FormValue("token")
 
 	if !checkToken(username, token) {
@@ -171,6 +179,8 @@ func addPlugin(w http.ResponseWriter, r *http.Request) {
 }
 
 func updatePlugin(w http.ResponseWriter, r *http.Request) {
+	log.Println("Handling PATCH request to /api/v2/plugins/:id")
+
 	username, token := r.FormValue("username"), r.FormValue("token")
 
 	if !checkToken(username, token) {
@@ -203,6 +213,8 @@ func updatePlugin(w http.ResponseWriter, r *http.Request) {
 }
 
 func deletePlugin(w http.ResponseWriter, r *http.Request) {
+	log.Println("Handling DEL request to /api/v2/plugins/:id")
+
 	id := r.URL.Query().Get(":id")
 
 	stmt, err := mainDB.Prepare("DELETE FROM plugins WHERE id = ?")
@@ -215,6 +227,8 @@ func deletePlugin(w http.ResponseWriter, r *http.Request) {
 }
 
 func uploadPlugin(w http.ResponseWriter, r *http.Request) {
+	log.Println("Handling POST request to /api/v2/upload/:id")
+
 	username, token := r.FormValue("username"), r.FormValue("token")
 
 	if !checkToken(username, token) {
@@ -246,6 +260,8 @@ func uploadPlugin(w http.ResponseWriter, r *http.Request) {
 }
 
 func downloadPlugin(w http.ResponseWriter, r *http.Request) {
+	log.Println("Handling GET request to /api/v2/download/:id")
+
 	body, err := ioutil.ReadAll(r.Body)
 	checkErr(err)
 	values, err := url.ParseQuery(string(body))
@@ -337,7 +353,7 @@ func downloadPlugin(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/java-archive") //Force JAR extension
 
-	http.ServeFile(w, r, "uploads/"+id+".jar")
+	http.ServeFile(w, r, "./uploads/"+id+".jar")
 }
 
 /* +++++++++++++++++++++++++++++++++++++++++++++++ */
