@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -245,7 +246,12 @@ func uploadPlugin(w http.ResponseWriter, r *http.Request) {
 }
 
 func downloadPlugin(w http.ResponseWriter, r *http.Request) {
-	license, port := r.FormValue("license"), r.FormValue("port")
+	body, err := ioutil.ReadAll(r.Body)
+	checkErr(err)
+	values, err := url.ParseQuery(string(body))
+	checkErr(err)
+
+	license, port := values.Get("license"), values.Get("port")
 
 	id := r.URL.Query().Get(":id")
 
