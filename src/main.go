@@ -45,11 +45,15 @@ func main() {
 	passwordsJSON = passFile
 
 	//Try to create tables
-	stmt, _ := mainDB.Prepare("CREATE TABLE IF NOT EXISTS plugins (ID INTEGER PRIMARY KEY AUTOINCREMENT, Name text, Version text)")
-	stmt.Exec()
+	stmt, stmtErr := mainDB.Prepare("CREATE TABLE IF NOT EXISTS plugins (ID INTEGER PRIMARY KEY AUTOINCREMENT, Name text, Version text)")
+	checkErr(stmtErr)
+	_, sqlerr := stmt.Exec()
+	checkErr(sqlerr)
 
-	stmt2, _ := mainDB.Prepare("CREATE TABLE IF NOT EXISTS twofactor (name text, secret text, unique(name))")
-	stmt2.Exec()
+	stmt2, stmt2Err := mainDB.Prepare("CREATE TABLE IF NOT EXISTS twofactor (name text, secret text, unique(name))")
+	checkErr(stmt2Err)
+	_, sqlerr2 := stmt2.Exec()
+	checkErr(sqlerr2)
 
 	r := pat.New()
 	r.Get("/api/v2/plugins", http.HandlerFunc(getPlugins))         //get all plugins
