@@ -78,7 +78,7 @@ func main() {
 }
 
 func createTwoFactor(w http.ResponseWriter, r *http.Request) {
-	log.Println("Handling GET request to /api/v2/2fa")
+	log.Println("Handling GET request from ", ReadUserIP(r), " to /api/v2/2fa")
 
 	password := r.FormValue("password")
 
@@ -110,8 +110,8 @@ func createTwoFactor(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "%s", string(qr))
 }
 
-func getPlugins(w http.ResponseWriter, _ *http.Request) {
-	log.Println("Handling GET request to /api/v2/plugins")
+func getPlugins(w http.ResponseWriter, r *http.Request) {
+	log.Println("Handling GET request from ", ReadUserIP(r), " to /api/v2/plugins")
 
 	rows, err := mainDB.Query("SELECT * FROM plugins")
 	checkErr(err)
@@ -134,7 +134,7 @@ func getPlugins(w http.ResponseWriter, _ *http.Request) {
 }
 
 func getPlugin(w http.ResponseWriter, r *http.Request) {
-	log.Println("Handling GET request to /api/v2/plugins/:id")
+	log.Println("Handling GET request from ", ReadUserIP(r), " to /api/v2/plugins/:id")
 
 	id := r.URL.Query().Get(":id")
 	stmt, err := mainDB.Prepare("SELECT * FROM plugins WHERE ID = ?")
@@ -157,7 +157,7 @@ func getPlugin(w http.ResponseWriter, r *http.Request) {
 }
 
 func addPlugin(w http.ResponseWriter, r *http.Request) {
-	log.Println("Handling POST request to /api/v2/plugins/:id")
+	log.Println("Handling POST request from ", ReadUserIP(r), " to /api/v2/plugins/:id")
 
 	username, token := r.FormValue("username"), r.FormValue("token")
 
@@ -183,7 +183,7 @@ func addPlugin(w http.ResponseWriter, r *http.Request) {
 }
 
 func updatePlugin(w http.ResponseWriter, r *http.Request) {
-	log.Println("Handling PATCH request to /api/v2/plugins/:id")
+	log.Println("Handling PATCH request from ", ReadUserIP(r), " to /api/v2/plugins/:id")
 
 	username, token := r.FormValue("username"), r.FormValue("token")
 
@@ -212,12 +212,12 @@ func updatePlugin(w http.ResponseWriter, r *http.Request) {
 		checkErr(errMarshal)
 		fmt.Fprintf(w, "%s\n", string(jsonB))
 	} else {
-		fmt.Fprintf(w, "{row_affected=%d}\n", rowAffected)
+		fmt.Fprintf(w, "{\"row_affected\":%d}\n", rowAffected)
 	}
 }
 
 func deletePlugin(w http.ResponseWriter, r *http.Request) {
-	log.Println("Handling DEL request to /api/v2/plugins/:id")
+	log.Println("Handling DEL request from ", ReadUserIP(r), " to /api/v2/plugins/:id")
 
 	id := r.URL.Query().Get(":id")
 
@@ -227,11 +227,11 @@ func deletePlugin(w http.ResponseWriter, r *http.Request) {
 	checkErr(errExec)
 	rowAffected, errRow := result.RowsAffected()
 	checkErr(errRow)
-	fmt.Fprintf(w, "{row_affected=%d}\n", rowAffected)
+	fmt.Fprintf(w, "{\"row_affected\":%d}\n", rowAffected)
 }
 
 func uploadPlugin(w http.ResponseWriter, r *http.Request) {
-	log.Println("Handling POST request to /api/v2/upload/:id")
+	log.Println("Handling POST request from ", ReadUserIP(r), " to /api/v2/upload/:id")
 
 	username, token := r.FormValue("username"), r.FormValue("token")
 
@@ -248,11 +248,9 @@ func uploadPlugin(w http.ResponseWriter, r *http.Request) {
 	checkErr(err)
 	defer file.Close()
 
-	fmt.Printf("Uploaded File: %+v\n", handler.Filename)
-	fmt.Printf("File Size: %+v\n", handler.Size)
-	fmt.Printf("MIME Header: %+v\n", handler.Header)
+	fmt.Println("Uploading file ", handler.Filename, " to /uploads/", id, ".jar...")
 
-	tempFile, err := ioutil.TempFile("uploads", id+".jar")
+	tempFile, err := ioutil.TempFile("./uploads", id+".jar")
 	checkErr(err)
 	defer tempFile.Close()
 
@@ -264,7 +262,7 @@ func uploadPlugin(w http.ResponseWriter, r *http.Request) {
 }
 
 func downloadPlugin(w http.ResponseWriter, r *http.Request) {
-	log.Println("Handling GET request to /api/v2/download/:id")
+	log.Println("Handling GET request from ", ReadUserIP(r), " to /api/v2/download/:id")
 
 	body, err := ioutil.ReadAll(r.Body)
 	checkErr(err)
@@ -406,4 +404,12 @@ func checkPort(input string, dataValue string) bool {
 
 	//ELSE, Invalid
 	return false
+}
+
+func ReadUserIP(r *http.Request) string {
+	IPAddress := r.Header.Get("CF-Connecting-IP")
+	if IPAddress == "" {
+		IPAddress = r.RemoteAddr
+	}
+	return IPAddress
 }
