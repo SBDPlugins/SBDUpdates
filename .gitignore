@@ -1,5 +1,5 @@
 # Ignore the uploads
-uploads/*
+uploads/
 
 # Ignore the password file
 pass.json
@@ -8,8 +8,8 @@ pass.json
 *.db
 
 # Ignore the builds
-out/*
+out/
 
 # Ignore IDEA file
-.idea/*
+.idea/
 *.iml
