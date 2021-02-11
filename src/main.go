@@ -94,7 +94,9 @@ func createTwoFactor(w http.ResponseWriter, r *http.Request) {
 
 	if password == "" {
 		errs.Add("password", "The password field is required!")
-	} else if password != dataPassword { //Using else if to make sure that the password is not empty
+	}
+
+	if password != "" && password != dataPassword {
 		errs.Add("password", "The entered password is incorrect!")
 	}
 
@@ -196,9 +198,13 @@ func addPlugin(w http.ResponseWriter, r *http.Request) {
 
 	if username == "" {
 		errs.Add("username", "The username field is required!")
-	} else if token == "" {
+	}
+
+	if token == "" {
 		errs.Add("token", "The token field is required!")
-	} else if !checkToken(username, token) { //Using else if structure to be sure that both are empty
+	}
+
+	if username != "" && token != "" && !checkToken(username, token) {
 		errs.Add("token", "The entered token is invalid!")
 	}
 
@@ -210,7 +216,9 @@ func addPlugin(w http.ResponseWriter, r *http.Request) {
 
 	if version == "" {
 		errs.Add("version", "The version field is required!")
-	} else if !versionRegex.MatchString(version) { //Using else if structure to be sure that both are empty
+	}
+
+	if version != "" && !versionRegex.MatchString(version) { //Using else if structure to be sure that both are empty
 		errs.Add("version", "The version field is incorrect!")
 	}
 
@@ -256,9 +264,13 @@ func updatePlugin(w http.ResponseWriter, r *http.Request) {
 
 	if username == "" {
 		errs.Add("username", "The username field is required!")
-	} else if token == "" {
+	}
+
+	if token == "" {
 		errs.Add("token", "The token field is required!")
-	} else if !checkToken(username, token) { //Using else if structure to be sure that both are empty
+	}
+
+	if username != "" && token != "" && !checkToken(username, token) {
 		errs.Add("token", "The entered token is invalid!")
 	}
 
@@ -270,7 +282,9 @@ func updatePlugin(w http.ResponseWriter, r *http.Request) {
 
 	if version == "" {
 		errs.Add("version", "The version field is required!")
-	} else if !versionRegex.MatchString(version) { //Using else if structure to be sure that both are empty
+	}
+
+	if version != "" && !versionRegex.MatchString(version) {
 		errs.Add("version", "The version field is incorrect!")
 	}
 
@@ -348,9 +362,13 @@ func uploadPlugin(w http.ResponseWriter, r *http.Request) {
 
 	if username == "" {
 		errs.Add("username", "The username field is required!")
-	} else if token == "" {
+	}
+
+	if token == "" {
 		errs.Add("token", "The token field is required!")
-	} else if !checkToken(username, token) { //Using else if structure to be sure that both are empty
+	}
+
+	if username != "" && token != "" && !checkToken(username, token) {
 		errs.Add("token", "The entered token is invalid!")
 	}
 
@@ -393,11 +411,17 @@ func downloadPlugin(w http.ResponseWriter, r *http.Request) {
 
 	if license == "" {
 		errs.Add("license", "The license field is required!")
-	} else if port == "" {
+	}
+
+	if port == "" {
 		errs.Add("port", "The port field is required!")
-	} else if license[0:3] != "TPP" && license[0:2] != "AF" && license[0:3] != "TPH" {
+	}
+
+	if license != "" && license[0:3] != "TPP" && license[0:2] != "AF" && license[0:3] != "TPH" {
 		errs.Add("license", "The provided license is not for a supported product!")
-	} else if (license[0:3] == "TPP" && (id != "7" && id != "4")) || (license[0:2] == "AF" && id != "3") || (license[0:3] == "TPH" && id != "5") {
+	}
+
+	if license != "" && (license[0:3] == "TPP" && (id != "7" && id != "4")) || (license[0:2] == "AF" && id != "3") || (license[0:3] == "TPH" && id != "5") {
 		errs.Add("license", "The provided ID is for another product than the provided license!")
 	}
 
