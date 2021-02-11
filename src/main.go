@@ -4,10 +4,13 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"net/url"
+	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -80,17 +83,35 @@ func main() {
 func createTwoFactor(w http.ResponseWriter, r *http.Request) {
 	log.Println("Handling GET request from ", ReadUserIP(r), " to /api/v2/2fa")
 
-	password := r.FormValue("password")
+	// Read data from request
+	password := r.FormValue("password") //The 2fa password
+	account := r.FormValue("account")   //The account name (that get's created)
 
-	dataPassword, _ := jsonparser.GetString(passwordsJSON, "twofactor")
+	// Validate the input
+	errs := url.Values{}
 
-	if password != dataPassword {
-		fmt.Fprintf(w, "%s\n", "{\"errors\": \"Invalid password.\"}")
+	dataPassword, _ := jsonparser.GetString(passwordsJSON, "twofactor") //This is the password in the pass.json file
+
+	if password == "" {
+		errs.Add("password", "The password field is required!")
+	} else if password != dataPassword { //Using else if to make sure that the password is not empty
+		errs.Add("password", "The entered password is incorrect!")
+	}
+
+	if account == "" {
+		errs.Add("account", "The account field is required!")
+	}
+
+	// And check if any errors occurred
+	if len(errs) > 0 {
+		err := map[string]interface{}{"validationError": errs}
+		w.Header().Set("Content-type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(err)
 		return
 	}
 
-	account := r.FormValue("account")
-
+	// Generate 2FA account and save to storage
 	secret, qr := generate(account, "SBDUpdates")
 
 	var twoFactorUser TwoFactorUser
@@ -107,12 +128,14 @@ func createTwoFactor(w http.ResponseWriter, r *http.Request) {
 	_, errExec2 := stmt2.Exec(twoFactorUser.Secret, twoFactorUser.Name)
 	checkErr(errExec2)
 
-	fmt.Fprintf(w, "%s", string(qr))
+	// Return image
+	_, _ = fmt.Fprintf(w, "%s", string(qr))
 }
 
 func getPlugins(w http.ResponseWriter, r *http.Request) {
 	log.Println("Handling GET request from ", ReadUserIP(r), " to /api/v2/plugins")
 
+	// Read data from database
 	rows, err := mainDB.Query("SELECT * FROM plugins")
 	checkErr(err)
 	var plugins Plugins
@@ -123,20 +146,24 @@ func getPlugins(w http.ResponseWriter, r *http.Request) {
 		plugins = append(plugins, plugin)
 	}
 
-	if len(plugins) == 0 { //Geen plugins gevonden
-		fmt.Fprintf(w, "%s\n", "{}")
+	// And give info back
+	if len(plugins) == 0 { // Nothing found?
+		_, _ = fmt.Fprintf(w, "%s\n", "{}")
 	} else {
 		jsonB, errMarshal := json.Marshal(plugins)
 		checkErr(errMarshal)
 
-		fmt.Fprintf(w, "%s\n", string(jsonB))
+		_, _ = fmt.Fprintf(w, "%s\n", string(jsonB))
 	}
 }
 
 func getPlugin(w http.ResponseWriter, r *http.Request) {
 	log.Println("Handling GET request from ", ReadUserIP(r), " to /api/v2/plugins/:id")
 
+	// Read data from request
 	id := r.URL.Query().Get(":id")
+
+	// Read data from database
 	stmt, err := mainDB.Prepare("SELECT * FROM plugins WHERE ID = ?")
 	checkErr(err)
 	rows, errQuery := stmt.Query(id)
@@ -147,29 +174,61 @@ func getPlugin(w http.ResponseWriter, r *http.Request) {
 		checkErr(err)
 	}
 
-	if plugin.ID == 0 { //Geen geldige plugin
-		fmt.Fprintf(w, "%s\n", "{}")
+	// And give info back
+	if plugin.ID == 0 { // Nothing found?
+		_, _ = fmt.Fprintf(w, "%s\n", "{}")
 	} else {
 		jsonB, errMarshal := json.Marshal(plugin)
 		checkErr(errMarshal)
-		fmt.Fprintf(w, "%s\n", string(jsonB))
+		_, _ = fmt.Fprintf(w, "%s\n", string(jsonB))
 	}
 }
 
 func addPlugin(w http.ResponseWriter, r *http.Request) {
 	log.Println("Handling POST request from ", ReadUserIP(r), " to /api/v2/plugins/:id")
 
+	// Read data from request
 	username, token := r.FormValue("username"), r.FormValue("token")
+	name, version := r.FormValue("name"), r.FormValue("version")
 
-	if !checkToken(username, token) {
-		fmt.Fprintf(w, "%s\n", "{\"errors\": \"Invalid token.\"}")
+	// Validate the input
+	errs := url.Values{}
+
+	if username == "" {
+		errs.Add("username", "The username field is required!")
+	} else if token == "" {
+		errs.Add("token", "The token field is required!")
+	} else if !checkToken(username, token) { //Using else if structure to be sure that both are empty
+		errs.Add("token", "The entered token is invalid!")
+	}
+
+	if name == "" {
+		errs.Add("name", "The name field is required!")
+	}
+
+	var versionRegex = regexp.MustCompile(`^(\d+\.)?(\d+\.)?(\*|\d+)$`)
+
+	if version == "" {
+		errs.Add("version", "The version field is required!")
+	} else if !versionRegex.MatchString(version) { //Using else if structure to be sure that both are empty
+		errs.Add("version", "The version field is incorrect!")
+	}
+
+	// And check if any errors occurred
+	if len(errs) > 0 {
+		err := map[string]interface{}{"validationError": errs}
+		w.Header().Set("Content-type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(err)
 		return
 	}
 
-	name, version := r.FormValue("name"), r.FormValue("version")
+	// Build the structure
 	var plugin Plugin
 	plugin.Name = name
 	plugin.Version = version
+
+	// And insert into the database
 	stmt, err := mainDB.Prepare("INSERT INTO plugins (Name, Version) VALUES (?, ?)")
 	checkErr(err)
 	result, errExec := stmt.Exec(plugin.Name, plugin.Version)
@@ -179,91 +238,146 @@ func addPlugin(w http.ResponseWriter, r *http.Request) {
 	plugin.ID = newID
 	jsonB, errMarshal := json.Marshal(plugin)
 	checkErr(errMarshal)
-	fmt.Fprintf(w, "%s\n", string(jsonB))
+
+	// And reply with the JSON of the structure
+	_, _ = fmt.Fprintf(w, "%s\n", string(jsonB))
 }
 
 func updatePlugin(w http.ResponseWriter, r *http.Request) {
 	log.Println("Handling PATCH request from ", ReadUserIP(r), " to /api/v2/plugins/:id")
 
+	// Read data from request
 	username, token := r.FormValue("username"), r.FormValue("token")
-
-	if !checkToken(username, token) {
-		fmt.Fprintf(w, "%s\n", "{\"errors\": \"Invalid token.\"}")
-		return
-	}
-
 	name, version := r.FormValue("name"), r.FormValue("version")
 	id := r.URL.Query().Get(":id")
 
+	// Validate the input
+	errs := url.Values{}
+
+	if username == "" {
+		errs.Add("username", "The username field is required!")
+	} else if token == "" {
+		errs.Add("token", "The token field is required!")
+	} else if !checkToken(username, token) { //Using else if structure to be sure that both are empty
+		errs.Add("token", "The entered token is invalid!")
+	}
+
+	if name == "" {
+		errs.Add("name", "The name field is required!")
+	}
+
+	var versionRegex = regexp.MustCompile(`^(\d+\.)?(\d+\.)?(\*|\d+)$`)
+
+	if version == "" {
+		errs.Add("version", "The version field is required!")
+	} else if !versionRegex.MatchString(version) { //Using else if structure to be sure that both are empty
+		errs.Add("version", "The version field is incorrect!")
+	}
+
+	// And check if any errors occurred
+	if len(errs) > 0 {
+		err := map[string]interface{}{"validationError": errs}
+		w.Header().Set("Content-type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(err)
+		return
+	}
+
+	// Build the structure
 	var plugin Plugin
 	ID, _ := strconv.ParseInt(id, 10, 0)
 	plugin.ID = ID
 	plugin.Name = name
 	plugin.Version = version
 
+	// And update in the database
 	stmt, err := mainDB.Prepare("UPDATE plugins SET name = ?, version = ? WHERE id = ?")
 	checkErr(err)
 	result, errExec := stmt.Exec(plugin.Name, plugin.Version, plugin.ID)
 	checkErr(errExec)
 	rowAffected, errLast := result.RowsAffected()
 	checkErr(errLast)
+
+	// And return updated JSON structure if found
 	if rowAffected > 0 {
 		jsonB, errMarshal := json.Marshal(plugin)
 		checkErr(errMarshal)
-		fmt.Fprintf(w, "%s\n", string(jsonB))
-	} else {
-		fmt.Fprintf(w, "{\"row_affected\":%d}\n", rowAffected)
+		_, _ = fmt.Fprintf(w, "%s\n", string(jsonB))
+	} else { // Or else return empty JSON
+		_, _ = fmt.Fprintf(w, "%s\n", "{}")
 	}
 }
 
 func deletePlugin(w http.ResponseWriter, r *http.Request) {
 	log.Println("Handling DEL request from ", ReadUserIP(r), " to /api/v2/plugins/:id")
 
+	// Read data from request
 	id := r.URL.Query().Get(":id")
 
+	// Remove from database
 	stmt, err := mainDB.Prepare("DELETE FROM plugins WHERE id = ?")
 	checkErr(err)
 	result, errExec := stmt.Exec(id)
 	checkErr(errExec)
 	rowAffected, errRow := result.RowsAffected()
 	checkErr(errRow)
-	fmt.Fprintf(w, "{\"row_affected\":%d}\n", rowAffected)
+
+	// And return success
+	_, _ = fmt.Fprintf(w, "{\"success\":%t}\n", rowAffected > 0)
 }
 
 func uploadPlugin(w http.ResponseWriter, r *http.Request) {
 	log.Println("Handling POST request from ", ReadUserIP(r), " to /api/v2/upload/:id")
 
+	// Read data from request
 	username, token := r.FormValue("username"), r.FormValue("token")
-
-	if !checkToken(username, token) {
-		fmt.Fprintf(w, "%s\n", "{\"errors\": \"Invalid token.\"}")
-		return
-	}
-
 	id := r.URL.Query().Get(":id")
 
-	r.ParseMultipartForm(10 << 20)
-
-	file, handler, err := r.FormFile("file")
+	_ = r.ParseMultipartForm(10 << 20)
+	file, _, err := r.FormFile("file")
 	checkErr(err)
 	defer file.Close()
 
-	fmt.Println("Uploading file ", handler.Filename, " to /uploads/", id, ".jar...")
+	// Validate the input
+	errs := url.Values{}
 
-	tempFile, err := ioutil.TempFile("./uploads", id+".jar")
+	if username == "" {
+		errs.Add("username", "The username field is required!")
+	} else if token == "" {
+		errs.Add("token", "The token field is required!")
+	} else if !checkToken(username, token) { //Using else if structure to be sure that both are empty
+		errs.Add("token", "The entered token is invalid!")
+	}
+
+	if file == nil {
+		errs.Add("file", "No file was provided.")
+	}
+
+	// And check if any errors occurred
+	if len(errs) > 0 {
+		err := map[string]interface{}{"validationError": errs}
+		w.Header().Set("Content-type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(err)
+		return
+	}
+
+	// Upload the file
+	f, err := os.OpenFile("./uploads"+id+".jar", os.O_WRONLY|os.O_CREATE, 0666)
 	checkErr(err)
-	defer tempFile.Close()
+	defer f.Close()
 
-	fileBytes, err := ioutil.ReadAll(file)
+	_, err = io.Copy(f, file)
 	checkErr(err)
-	tempFile.Write(fileBytes)
 
-	fmt.Fprintf(w, "%s\n", "{\"success\": \"Upload is done.\"}")
+	// And return success
+	_, _ = fmt.Fprintf(w, "{\"success\":%t}\n", true)
 }
 
 func downloadPlugin(w http.ResponseWriter, r *http.Request) {
 	log.Println("Handling GET request from ", ReadUserIP(r), " to /api/v2/download/:id")
 
+	// Read data from request
 	body, err := ioutil.ReadAll(r.Body)
 	checkErr(err)
 	values, err := url.ParseQuery(string(body))
@@ -273,20 +387,24 @@ func downloadPlugin(w http.ResponseWriter, r *http.Request) {
 
 	id := r.URL.Query().Get(":id")
 
-	if license[0:3] == "TPP" && (id == "7" || id == "4") {
+	// Validate the input
+	errs := url.Values{}
 
-	} else if license[0:2] == "AF" && id == "3" {
-
-	} else if license[0:3] == "TPH" && id == "5" {
-
-	} else {
-		fmt.Fprintf(w, "%s\n", "{\"errors\": \"Wrong license for this product.\"}")
-		return
+	if license == "" {
+		errs.Add("license", "The license field is required!")
+	} else if port == "" {
+		errs.Add("port", "The port field is required!")
+	} else if license[0:3] != "TPP" && license[0:2] != "AF" && license[0:3] != "TPH" {
+		errs.Add("license", "The provided license is not for a supported product!")
+	} else if (license[0:3] == "TPP" && (id != "7" && id != "4")) || (license[0:2] == "AF" && id != "3") || (license[0:3] == "TPH" && id != "5") {
+		errs.Add("license", "The provided ID is for another product than the provided license!")
 	}
 
+	// Read username and password for License Manager API from pass.json
 	username, _ := jsonparser.GetString(passwordsJSON, "license", "username")
 	password, _ := jsonparser.GetString(passwordsJSON, "license", "password")
 
+	// Send request to License Manager API to validate License
 	client := &http.Client{}
 	URL := "https://sbdplugins.nl/wp-json/lmfwc/v2/licenses/" + license
 	req, err := http.NewRequest("GET", URL, nil)
@@ -298,34 +416,24 @@ func downloadPlugin(w http.ResponseWriter, r *http.Request) {
 	defer resp.Body.Close()
 	checkErr(err)
 
-	fmt.Println(string(b))
-
+	// Read the response from the license manager
 	status, _ := jsonparser.GetInt(b, "data", "status")
 	timesActivated, _ := jsonparser.GetUnsafeString(b, "data", "timesActivated")
 	expiresAt, _ := jsonparser.GetUnsafeString(b, "data", "expiresAt")
 	ipCheck, _ := jsonparser.GetBoolean(b, "data", "ipcheck")
 	dataPort, _ := jsonparser.GetUnsafeString(b, "data", "port")
 
-	switch status {
-	case 2:
-		//Do nothing, it's delivered.
-		break
-	case 3:
-		//Do nothing, it's activated.
-		break
-	default:
-		fmt.Fprintf(w, "%s\n", "{\"errors\": \"Invalid license status.\"}")
-		return
+	// And validate that
+	if status != 2 && status != 3 {
+		errs.Add("license", "The license is not Delivered or Activated.")
 	}
 
 	if timesActivated == "" || timesActivated == "0" {
-		fmt.Fprintf(w, "%s\n", "{\"errors\": \"License is not activated.\"}")
-		return
+		errs.Add("license", "The license is not Activated.")
 	}
 
 	if expiresAt == "" {
-		fmt.Fprintf(w, "%s\n", "{\"errors\": \"License has no expire date.\"}")
-		return
+		errs.Add("license", "The license has no expire date.")
 	}
 
 	format := "2006-01-02 15:04:05"
@@ -334,33 +442,46 @@ func downloadPlugin(w http.ResponseWriter, r *http.Request) {
 	checkErr(err)
 
 	if t.Before(time.Now()) {
-		fmt.Fprintf(w, "%s\n", "{\"errors\": \"License has expired.\"}")
-		return
+		errs.Add("license", "The license is expired.")
 	}
 
 	if !ipCheck {
-		fmt.Fprintf(w, "%s\n", "{\"errors\": \"License has been used with another IP.\"}")
-		return
+		errs.Add("license", "The license has been used with another IP.")
 	}
 
 	if dataPort == "" {
-		fmt.Fprintf(w, "%s\n", "{\"errors\": \"License has no port.\"}")
-		return
+		errs.Add("license", "The license has no port.")
 	}
 
 	if !checkPort(port, dataPort) {
-		fmt.Fprintf(w, "%s\n", "{\"errors\": \"License has been used with another Port.\"}")
+		errs.Add("license", "The license has been used with another port.")
+	}
+
+	// And check if any errors occurred
+	if len(errs) > 0 {
+		err := map[string]interface{}{"validationError": errs}
+		w.Header().Set("Content-type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(err)
 		return
 	}
 
+	// Serve the file
 	w.Header().Set("Content-Type", "application/java-archive") //Force JAR extension
-
 	http.ServeFile(w, r, "./uploads/"+id+".jar")
 }
 
 /* +++++++++++++++++++++++++++++++++++++++++++++++ */
 
+func checkErr(err error) {
+	if err != nil {
+		panic(err)
+	}
+}
+
 func checkToken(username string, token string) bool {
+	username = replaceUsername(username)
+
 	stmt, err := mainDB.Prepare("SELECT secret FROM twofactor WHERE name = ?")
 	checkErr(err)
 
@@ -371,10 +492,16 @@ func checkToken(username string, token string) bool {
 	return validate(secret, token)
 }
 
-func checkErr(err error) {
-	if err != nil {
-		panic(err)
-	}
+func replaceUsername(username string) string {
+	regone, err := regexp.Compile("[^0-9a-z-A-Z ]")
+	checkErr(err)
+	username = regone.ReplaceAllString(username, "")
+
+	regtwo, err := regexp.Compile(" +")
+	checkErr(err)
+	username = regtwo.ReplaceAllString(username, "_")
+
+	return username
 }
 
 func checkPort(input string, dataValue string) bool {
@@ -406,6 +533,9 @@ func checkPort(input string, dataValue string) bool {
 	return false
 }
 
+// Get the IP of a user, by the request headers.
+// This only works if Cloudflare is between it.
+// Returns the IP of the user.
 func ReadUserIP(r *http.Request) string {
 	IPAddress := r.Header.Get("CF-Connecting-IP")
 	if IPAddress == "" {
