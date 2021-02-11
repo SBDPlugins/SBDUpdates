@@ -1,0 +1,37 @@
+name: GoLang CI
+
+on: [push, pull_request]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Setup Go
+      uses: actions/setup-go@v2
+      with:
+        go-version: '1.14.0'
+
+    - name: Install dependencies
+      run: |
+        go version
+        go get -u golang.org/x/lint/golint
+        go get -u github.com/buger/jsonparser
+        go get -u github.com/bmizerany/pat
+        go get -u github.com/mattn/go-sqlite3
+
+    - name: Run build
+      run: cd src && go build -v -o ../out/Go_Build_Linux
+
+    - name: Run vet & lint
+      run: |
+        cd src
+        go vet .
+        golint .
+
+    - uses: actions/upload-artifact@master
+      with:
+        name: sbdupdates
+        path: out

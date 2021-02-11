@@ -1,5 +1,5 @@
 # SBDPlugins Update Rest API
-THis is the SBDPlugins Update API. It's written in Golang.
+This is the SBDPlugins Update API. It's written in Golang.
 
 ### The files you need:
 - data.db
