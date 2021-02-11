@@ -335,11 +335,16 @@ func uploadPlugin(w http.ResponseWriter, r *http.Request) {
 
 	_ = r.ParseMultipartForm(10 << 20)
 	file, _, err := r.FormFile("file")
-	checkErr(err)
-	defer file.Close()
 
 	// Validate the input
 	errs := url.Values{}
+
+	if file == nil {
+		errs.Add("file", "No file was provided.")
+	} else {
+		checkErr(err)
+		defer file.Close()
+	}
 
 	if username == "" {
 		errs.Add("username", "The username field is required!")
@@ -347,10 +352,6 @@ func uploadPlugin(w http.ResponseWriter, r *http.Request) {
 		errs.Add("token", "The token field is required!")
 	} else if !checkToken(username, token) { //Using else if structure to be sure that both are empty
 		errs.Add("token", "The entered token is invalid!")
-	}
-
-	if file == nil {
-		errs.Add("file", "No file was provided.")
 	}
 
 	// And check if any errors occurred

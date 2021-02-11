@@ -25,7 +25,7 @@ jobs:
         go get -u rsc.io/qr
 
     - name: Run build
-      run: cd src && go build -v -o ../out/Go_Build_Linux
+      run: cd src && go build -v -o ../out/Go_Build_linux
 
     - name: Run vet & lint
       run: |
