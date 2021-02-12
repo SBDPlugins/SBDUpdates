@@ -419,16 +419,15 @@ func downloadPlugin(w http.ResponseWriter, r *http.Request) {
 
 	if license != "" && len(license) < 3 {
 		errs.Add("license", "The provided license is invalid!")
-	}
+	} else if license != "" {
+		var product = license[0:3]
+		if product != "TPP" && product != "AF-" && product != "TPH" {
+			errs.Add("license", "The provided license is not for a supported product!")
+		}
 
-	var product = license[0:3]
-
-	if license != "" && product != "TPP" && product != "AF-" && product != "TPH" {
-		errs.Add("license", "The provided license is not for a supported product!")
-	}
-
-	if license != "" && (product == "TPP" && (id != "7" && id != "4")) || (product == "AF-" && id != "3") || (product == "TPH" && id != "5") {
-		errs.Add("license", "The provided ID is for another product than the provided license!")
+		if (product == "TPP" && (id != "7" && id != "4")) || (product == "AF-" && id != "3") || (product == "TPH" && id != "5") {
+			errs.Add("license", "The provided ID is for another product than the provided license!")
+		}
 	}
 
 	// Read username and password for License Manager API from pass.json
@@ -465,15 +464,15 @@ func downloadPlugin(w http.ResponseWriter, r *http.Request) {
 
 	if expiresAt == "" {
 		errs.Add("license", "The license has no expire date.")
-	}
+	} else {
+		format := "2006-01-02 15:04:05"
 
-	format := "2006-01-02 15:04:05"
+		t, err := time.Parse(format, expiresAt)
+		checkErr(err)
 
-	t, err := time.Parse(format, expiresAt)
-	checkErr(err)
-
-	if t.Before(time.Now()) {
-		errs.Add("license", "The license is expired.")
+		if t.Before(time.Now()) {
+			errs.Add("license", "The license is expired.")
+		}
 	}
 
 	if !ipCheck {
