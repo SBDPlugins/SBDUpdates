@@ -417,11 +417,17 @@ func downloadPlugin(w http.ResponseWriter, r *http.Request) {
 		errs.Add("port", "The port field is required!")
 	}
 
-	if license != "" && license[0:3] != "TPP" && license[0:2] != "AF" && license[0:3] != "TPH" {
+	if license != "" && len(license) < 3 {
+		errs.Add("license", "The provided license is invalid!")
+	}
+
+	var product = license[0:3]
+
+	if license != "" && product != "TPP" && product != "AF-" && product != "TPH" {
 		errs.Add("license", "The provided license is not for a supported product!")
 	}
 
-	if license != "" && (license[0:3] == "TPP" && (id != "7" && id != "4")) || (license[0:2] == "AF" && id != "3") || (license[0:3] == "TPH" && id != "5") {
+	if license != "" && (product == "TPP" && (id != "7" && id != "4")) || (product == "AF-" && id != "3") || (product == "TPH" && id != "5") {
 		errs.Add("license", "The provided ID is for another product than the provided license!")
 	}
 
