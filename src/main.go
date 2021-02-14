@@ -113,6 +113,8 @@ func createTwoFactor(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	account = replaceUsername(account) //Overwrite with safe name
+
 	// Generate 2FA account and save to storage
 	secret, qr := generate(account, "SBDUpdates")
 
@@ -523,7 +525,7 @@ func checkToken(username string, token string) bool {
 }
 
 func replaceUsername(username string) string {
-	regone, err := regexp.Compile("[^0-9a-z-A-Z ]")
+	regone, err := regexp.Compile("[^0-9a-z-A-Z _]")
 	checkErr(err)
 	username = regone.ReplaceAllString(username, "")
 
